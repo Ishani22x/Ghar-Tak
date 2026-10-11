@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="hi" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>घर-तक (Ghar-Tak) - गाँव-गाँव तक होम डिलीवरी</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            800: '#166534',
+                        },
+                        saffron: {
+                            500: '#f97316',
+                            600: '#ea580c',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'Hind', 'system-ui', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts for Devanagari Script -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hind:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS for Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        /* Custom scrollbar hiding helper */
+        .scrollbar-none::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-none {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .snap-touch {
+            -webkit-overflow-scrolling: touch;
+        }
+        /* Custom map pin glow animation */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.15); opacity: 0.4; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+        .pulse-marker {
+            animation: pulse-ring 2s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="h-full text-slate-800 font-sans flex flex-col antialiased selection:bg-brand-500 selection:text-white">
+
+    <!-- Top-Positioned Toast Notification Container -->
+    <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 w-11/12 max-w-md pointer-events-none"></div>
+
+    <!-- Header -->
+    <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16 gap-3">
+                <!-- Logo & Tagline -->
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-saffron-500 flex items-center justify-center text-white font-bold text-xl shadow-md shadow-brand-500/20">
+                        <i class="fa-solid fa-truck-fast"></i>
+                    </div>
+                    <div>
+                        <a href="#" onclick="selectCategory('all')" class="text-xl font-extrabold tracking-tight text-slate-900 flex items-center gap-1">
+                            <span>घर-तक</span>
+                            <span class="text-xs px-2 py-0.5 rounded-full bg-saffron-500/10 text-saffron-600 font-semibold border border-saffron-500/20">Ghar-Tak</span>
+                        </a>
+                        <p class="text-[11px] text-slate-500 font-medium hidden sm:block" id="header-subtitle">गाँव-गाँव तक सीधी होम डिलीवरी</p>
+                    </div>
+                </div>
+
+                <!-- Central Search Bar (Desktop/Tablet) -->
+                <div class="hidden md:flex flex-1 max-w-md mx-4 relative">
+                    <input type="text" id="desktop-search" oninput="handleSearch(this.value)" placeholder="सामान खोजें (जैसे: चीनी, साबुन, तेल)..." class="w-full pl-10 pr-4 py-2 text-sm bg-slate-100 hover:bg-slate-50 focus:bg-white border border-slate-200 focus:border-brand-500 rounded-full outline-none transition duration-150">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-2.5 text-slate-400"></i>
+                    <button id="desktop-clear-search" onclick="clearSearch()" class="hidden absolute right-3 top-2.5 text-slate-400 hover:text-slate-600">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <!-- Right Actions: Language Switch, Location Status & Cart -->
+                <div class="flex items-center gap-2 sm:gap-3">
+                    <!-- Language Toggle -->
+                    <button onclick="toggleLanguage()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition border border-slate-200" title="Switch Language">
+                        <i class="fa-solid fa-language text-brand-600 text-sm"></i>
+                        <span id="lang-btn-text">English</span>
+                    </button>
+
+                    <!-- Location Selector Button -->
+                    <button onclick="openLocationModal()" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition">
+                        <i class="fa-solid fa-location-dot text-amber-600"></i>
+                        <span id="header-location-text" class="max-w-[120px] truncate">स्थान चुनें</span>
+                    </button>
+
+                    <!-- Cart Drawer Trigger Button -->
+                    <button onclick="toggleCartModal(true)" class="relative p-2.5 rounded-xl bg-brand-500 text-white hover:bg-brand-600 transition shadow-sm flex items-center justify-center">
+                        <i class="fa-solid fa-basket-shopping text-base"></i>
+                        <span id="cart-badge-count" class="absolute -top-1.5 -right-1.5 bg-saffron-500 text-white text-[11px] font-bold rounded-full h-5 min-w-[20px] px-1 flex items-center justify-center border-2 border-white shadow-sm">0</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mobile Search Bar -->
+            <div class="pb-3 md:hidden">
+                <div class="relative">
+                    <input type="text" id="mobile-search" oninput="handleSearch(this.value)" placeholder="सामान या कैटेगिरी खोजें..." class="w-full pl-10 pr-8 py-2 text-sm bg-slate-100 focus:bg-white border border-slate-200 focus:border-brand-500 rounded-xl outline-none transition">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-2.5 text-slate-400"></i>
+                    <button id="mobile-clear-search" onclick="clearSearch()" class="hidden absolute right-3 top-2.5 text-slate-400 hover:text-slate-600">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CATEGORY NAVIGATION BAR (Compact, Scrollable & Snap Alignment) -->
+        <div class="bg-slate-50/90 border-t border-slate-200/80 py-2.5 px-4 shadow-inner">
+            <div class="max-w-7xl mx-auto flex items-center gap-2">
+                
+                <!-- Quick Category Dropdown/Grid Modal Trigger -->
+                <button onclick="toggleCategoryModal(true)" class="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl transition shadow-sm active:scale-95" title="सभी कैटेगिरी देखें">
+                    <i class="fa-solid fa-border-all text-amber-400"></i>
+                    <span id="all-cat-btn-text">सभी कैटेगिरी</span>
+                    <i class="fa-solid fa-chevron-down text-[10px] opacity-70"></i>
+                </button>
+
+                <div class="h-5 w-px bg-slate-300 flex-shrink-0 my-auto"></div>
+
+                <!-- Horizontally Scrollable Snap Category Pills -->
+                <nav id="category-scroll-container" class="flex items-center gap-2 overflow-x-auto scrollbar-none snap-x snap-touch py-0.5 w-full">
+                    <!-- Dynamic Category Pills Rendered by JS -->
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+        <!-- Banner / Village Delivery Notice -->
+        <div class="mb-6 rounded-2xl bg-gradient-to-r from-brand-700 via-brand-600 to-emerald-800 text-white p-4 sm:p-6 shadow-md relative overflow-hidden flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="z-10 text-center sm:text-left">
+                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 text-xs font-semibold backdrop-blur-sm mb-2 text-brand-100">
+                    <i class="fa-solid fa-bolt text-amber-300"></i> <span id="banner-tag">सुरक्षित और तेज़ होम डिलीवरी</span>
+                </span>
+                <h2 class="text-xl sm:text-2xl font-bold tracking-tight" id="banner-title">आपके गाँव तक शुद्ध और ताज़ा सामान!</h2>
+                <p class="text-xs sm:text-sm text-brand-100 mt-1 max-w-xl" id="banner-desc">ऑर्डर करें और सीधे व्हाट्सएप से अपने घर पर पाएँ। ₹499 से अधिक के ऑर्डर पर मुफ्त डिलीवरी।</p>
+            </div>
+            <div class="z-10 flex-shrink-0 flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 p-2.5 rounded-xl text-xs">
+                <i class="fa-solid fa-headset text-2xl text-amber-300"></i>
+                <div>
+                    <div class="text-[10px] text-brand-100" id="banner-help-title">मदद चाहिए? संपर्क करें</div>
+                    <div class="font-bold text-sm tracking-wide">+91 79033 84714</div>
+                </div>
+            </div>
+            <!-- Background Decorative circles -->
+            <div class="absolute -right-10 -bottom-10 w-40 h-40 bg-white/5 rounded-full blur-xl pointer-events-none"></div>
+        </div>
+
+        <!-- Section Header with Category Title & Active Item Counter -->
+        <div class="flex items-center justify-between mb-5 flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+                <h1 id="active-category-title" class="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
+                    <!-- Dynamic Active Title -->
+                </h1>
+                <span id="product-count-badge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-200 text-slate-700">0</span>
+            </div>
+            
+            <div class="flex items-center gap-2 text-xs text-slate-500">
+                <label for="sort-select" class="font-medium" id="sort-label">क्रमबद्ध करें:</label>
+                <select id="sort-select" onchange="handleSortChange(this.value)" class="bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs focus:ring-brand-500 focus:border-brand-500 outline-none">
+                    <option value="default" id="sort-opt-default">लोकप्रियता (Popular)</option>
+                    <option value="price-low" id="sort-opt-low">कीमत: कम से ज़्यादा</option>
+                    <option value="price-high" id="sort-opt-high">कीमत: ज़्यादा से कम</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Products Grid -->
+        <div id="products-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-5">
+            <!-- Dynamic Products HTML -->
+        </div>
+
+        <!-- Empty Search State -->
+        <div id="empty-state" class="hidden text-center py-16 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 my-6">
+            <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400 text-2xl">
+                <i class="fa-solid fa-basket-shopping"></i>
+            </div>
+            <h3 class="text-base font-bold text-slate-800" id="empty-title">कोई सामान नहीं मिला</h3>
+            <p class="text-xs text-slate-500 mt-1" id="empty-desc">कृपया दूसरा शब्द खोजें या कोई अन्य कैटेगिरी चुनें।</p>
+            <button onclick="selectCategory('all'); clearSearch();" class="mt-4 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-semibold transition">
+                <span id="empty-btn-text">सभी सामान देखें</span>
+            </button>
+        </div>
+
+    </main>
+
+    <!-- ALL CATEGORIES MODAL (Quick Selector Grid for Mobile & Desktop) -->
+    <div id="category-modal" class="fixed inset-0 z-50 hidden transition-opacity duration-200">
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="toggleCategoryModal(false)"></div>
+        <div class="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-2xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div class="p-4 bg-slate-900 text-white flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-border-all text-amber-400"></i>
+                    <h3 class="font-bold text-base" id="modal-cat-title">सभी कैटेगिरी चुनें (Select Category)</h3>
+                </div>
+                <button onclick="toggleCategoryModal(false)" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 hover:text-white transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="p-4 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-3" id="modal-categories-grid">
+                <!-- Dynamic Category Grid Items -->
+            </div>
+        </div>
+    </div>
+
+    <!-- SLIDE-OVER CART DRAWER -->
+    <div id="cart-drawer" class="fixed inset-0 z-50 hidden">
+        <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity" onclick="toggleCartModal(false)"></div>
+        <div class="fixed inset-y-0 right-0 max-w-md w-full bg-white shadow-2xl flex flex-col transform transition-transform duration-300">
+            <!-- Cart Header -->
+            <div class="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-cart-shopping text-brand-500"></i>
+                    <h2 class="font-bold text-base" id="cart-header-title">आपकी टोकरी (Your Cart)</h2>
+                </div>
+                <button onclick="toggleCartModal(false)" class="p-1 text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Free Delivery Progress Bar -->
+            <div class="bg-brand-50 p-3 border-b border-brand-100">
+                <div class="flex justify-between text-xs font-semibold text-brand-800 mb-1" id="free-shipping-text">
+                    <span>मुफ्त होम डिलीवरी लक्ष्य</span>
+                    <span id="free-shipping-status">₹499 में से ₹0</span>
+                </div>
+                <div class="w-full bg-brand-200 h-2 rounded-full overflow-hidden">
+                    <div id="free-shipping-bar" class="bg-brand-600 h-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Cart Items List -->
+            <div id="cart-items-container" class="flex-1 overflow-y-auto p-4 space-y-3">
+                <!-- Dynamic Cart Items -->
+            </div>
+
+            <!-- Cart Footer & Checkout Action -->
+            <div class="p-4 bg-slate-50 border-t border-slate-200 space-y-3">
+                <div class="space-y-1.5 text-xs text-slate-600">
+                    <div class="flex justify-between">
+                        <span id="cart-subtotal-label">कुल सामान कीमत:</span>
+                        <span id="cart-subtotal" class="font-bold text-slate-900">₹0</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span id="cart-delivery-label">डिलीवरी शुल्क:</span>
+                        <span id="cart-delivery-fee" class="font-semibold text-brand-600">मुफ्त</span>
+                    </div>
+                    <div class="flex justify-between text-base font-extrabold text-slate-900 pt-2 border-t border-slate-200">
+                        <span id="cart-total-label">कुल योग (Total):</span>
+                        <span id="cart-total" class="text-brand-700">₹0</span>
+                    </div>
+                </div>
+
+                <div class="pt-2 gap-2 flex">
+                    <button onclick="openLocationModal()" class="flex-1 py-2.5 px-3 bg-white border border-slate-300 hover:bg-slate-100 rounded-xl text-xs font-semibold text-slate-700 flex items-center justify-center gap-1.5 transition">
+                        <i class="fa-solid fa-map-location-dot text-saffron-500"></i>
+                        <span id="cart-addr-btn">पता दर्ज करें</span>
+                    </button>
+                    <button onclick="checkoutToWhatsApp()" class="flex-[2] py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-emerald-600/30 transition active:scale-98">
+                        <i class="fa-brands fa-whatsapp text-lg"></i>
+                        <span id="whatsapp-btn-text">व्हाट्सएप पर आर्डर भेजें</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOCATION & MAP ADDRESS PICKER MODAL -->
+    <div id="location-modal" class="fixed inset-0 z-50 hidden">
+        <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" onclick="closeLocationModal()"></div>
+        <div class="fixed inset-x-4 top-[5%] bottom-[5%] max-w-xl mx-auto bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+            <div class="p-4 bg-slate-900 text-white flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-map-pin text-saffron-500"></i>
+                    <h3 class="font-bold text-sm sm:text-base" id="loc-modal-title">डिलीवरी का सटीक पता चुनें</h3>
+                </div>
+                <button onclick="closeLocationModal()" class="text-slate-400 hover:text-white transition">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Leaflet Map Box -->
+            <div class="relative h-48 sm:h-60 w-full bg-slate-100">
+                <div id="leaflet-map" class="h-full w-full"></div>
+                <button onclick="getUserGPSLocation()" class="absolute bottom-3 right-3 z-[400] bg-white hover:bg-slate-50 text-slate-800 font-semibold px-3 py-1.5 rounded-xl text-xs shadow-md border border-slate-200 flex items-center gap-1.5">
+                    <i class="fa-solid fa-crosshairs text-brand-600"></i>
+                    <span id="gps-btn-text">मेरा स्थान (GPS)</span>
+                </button>
+            </div>
+
+            <!-- Address Form -->
+            <div class="p-4 flex-1 overflow-y-auto space-y-3 bg-slate-50">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1" id="lbl-village">गाँव / टोला / क्षेत्र का नाम *</label>
+                    <input type="text" id="input-village" placeholder="उदा: रामपुर टोला, वार्ड नं 4" class="w-full text-xs p-2.5 bg-white border border-slate-300 rounded-xl outline-none focus:border-brand-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1" id="lbl-landmark">आस-पास का लैंडमार्क (उदा: मंदिर / स्कूल) *</label>
+                    <input type="text" id="input-landmark" placeholder="उदा: प्राथमिक विद्यालय के पास" class="w-full text-xs p-2.5 bg-white border border-slate-300 rounded-xl outline-none focus:border-brand-500">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1" id="lbl-pincode">पिनकोड *</label>
+                        <input type="text" id="input-pincode" placeholder="800001" class="w-full text-xs p-2.5 bg-white border border-slate-300 rounded-xl outline-none focus:border-brand-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1" id="lbl-phone">मोबाइल नंबर *</label>
+                        <input type="tel" id="input-phone" placeholder="9876543210" class="w-full text-xs p-2.5 bg-white border border-slate-300 rounded-xl outline-none focus:border-brand-500">
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 bg-white border-t border-slate-200">
+                <button onclick="saveLocationAddress()" class="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-xs transition shadow-md">
+                    <span id="save-addr-btn">पता सुरक्षित करें और जारी रखें</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Data Structure for all 12 Categories with Icons and Translations
+        const CATEGORIES = [
+            { id: 'all', icon: 'fa-border-all', emoji: '🛒', hi: 'सभी सामान', en: 'All Items' },
+            { id: 'groceries', icon: 'fa-wheat-awn', emoji: '🌾', hi: 'राशन और किराना', en: 'Groceries & Staples' },
+            { id: 'personal-care', icon: 'fa-pump-soap', emoji: '🧴', hi: 'पर्सनल केयर', en: 'Personal Care' },
+            { id: 'cleaning', icon: 'fa-broom', emoji: '🧹', hi: 'घर की सफाई', en: 'Cleaning Supplies' },
+            { id: 'snacks', icon: 'fa-cookie-bite', emoji: '🍿', hi: 'स्नैक्स और पैकेज्ड फूड', en: 'Snacks & Packaged Food' },
+            { id: 'kitchen', icon: 'fa-utensils', emoji: '🍳', hi: 'किचन का सामान', en: 'Kitchen Essentials' },
+            { id: 'household', icon: 'fa-house-chimney', emoji: '🏠', hi: 'घर का सामान', en: 'Household Essentials' },
+            { id: 'electricals', icon: 'fa-plug', emoji: '💡', hi: 'बिजली का सामान', en: 'Electricals' },
+            { id: 'stationery', icon: 'fa-pen-ruler', emoji: '📚', hi: 'स्टेशनरी और पढ़ाई', en: 'Stationery' },
+            { id: 'puja', icon: 'fa-om', emoji: '🪔', hi: 'पूजा सामग्री', en: 'Puja Essentials' },
+            { id: 'clothing', icon: 'fa-shirt', emoji: '👕', hi: 'कपड़े और फुटवियर', en: 'Clothing & Footwear' },
+            { id: 'baby-care', icon: 'fa-baby', emoji: '👶', hi: 'बेबी केयर', en: 'Baby Care' },
+            { id: 'hardware', icon: 'fa-wrench', emoji: '🛠️', hi: 'हार्डवेयर और औज़ार', en: 'Hardware & Tools' }
+        ];
+
+        // Sample Inventory Products across 12 Categories
+        const PRODUCTS = [
+            { id: 1, category: 'groceries', price: 195, unit: '5 kg', hi: 'आशीर्वाद आटा', en: 'Aashirvaad Atta', image: '🌾' },
+            { id: 2, category: 'groceries', price: 140, unit: '1 L', hi: 'फॉर्च्यून सरसों तेल', en: 'Fortune Mustard Oil', image: '🛢️' },
+            { id: 3, category: 'groceries', price: 44, unit: '1 kg', hi: 'टाटा नमक', en: 'Tata Salt', image: '🧂' },
+            { id: 4, category: 'groceries', price: 48, unit: '1 kg', hi: 'उत्तम चीनी (Sugar)', en: 'Uttam Sugar', image: '🍬' },
+            { id: 5, category: 'personal-care', price: 38, unit: '100g', hi: 'कोलगेट टूथपेस्ट', en: 'Colgate Toothpaste', image: '🪥' },
+            { id: 6, category: 'personal-care', price: 45, unit: '125g', hi: 'लक्स साबुन (Lux Soap)', en: 'Lux Beauty Soap', image: '🧼' },
+            { id: 7, category: 'personal-care', price: 95, unit: '180ml', hi: 'क्लिनिक प्लस शैम्पू', en: 'Clinic Plus Shampoo', image: '🧴' },
+            { id: 8, category: 'cleaning', price: 110, unit: '1 kg', hi: 'सर्फ एक्सेल वाशिंग पाउडर', en: 'Surf Excel Detergent', image: '🧺' },
+            { id: 9, category: 'cleaning', price: 85, unit: '500ml', hi: 'हार्पिक टॉयलेट क्लीनर', en: 'Harpic Toilet Cleaner', image: '🧽' },
+            { id: 10, category: 'snacks', price: 20, unit: 'PACK', hi: 'पारले-जी बिस्किट (4 पैक)', en: 'Parle-G Biscuit Pack', image: '🍪' },
+            { id: 11, category: 'snacks', price: 12, unit: 'PACK', hi: 'मैगी 2-मिनट नूडल्स', en: 'Maggi Noodles', image: '🍜' },
+            { id: 12, category: 'kitchen', price: 350, unit: '1 Set', hi: 'स्टील पतीला (3 लीटर)', en: 'Steel Pot (3L)', image: '🍲' },
+            { id: 13, category: 'household', price: 180, unit: '1 Pc', hi: 'प्लास्टिक बाल्टी (20L)', en: 'Plastic Bucket 20L', image: '🪣' },
+            { id: 14, category: 'electricals', price: 99, unit: '9W LED', hi: 'फिलिप्स LED बल्ब', en: 'Philips LED Bulb 9W', image: '💡' },
+            { id: 15, category: 'electricals', price: 160, unit: '5 Metre', hi: 'एंकर एक्सटेंशन बोर्ड Wire', en: 'Anchor Extension Wire', image: '🔌' },
+            { id: 16, category: 'stationery', price: 60, unit: '5 Pack', hi: 'क्लासमेर्ट नोटबुक (कॉपी)', en: 'Classmate Notebook', image: '📓' },
+            { id: 17, category: 'puja', price: 45, unit: '200g', hi: 'गाय का शुद्ध घी (पूजा)', en: 'Pure Cow Ghee (Puja)', image: '🪔' },
+            { id: 18, category: 'puja', price: 30, unit: '1 Box', hi: 'साइकिल अगरबत्ती', en: 'Cycle Incense Sticks', image: '🪵' },
+            { id: 19, category: 'clothing', price: 249, unit: '1 Pair', hi: 'बाटा जेंट्स स्लीपर/चप्पल', en: 'Bata Gents Slippers', image: '🩴' },
+            { id: 20, category: 'baby-care', price: 399, unit: 'M Pack', hi: 'पैमपर्स बेबी डायपर', en: 'Pampers Baby Diapers', image: '👶' },
+            { id: 21, category: 'hardware', price: 120, unit: '1 Pc', hi: 'लोहे का हथौड़ा (Hammer)', en: 'Steel Hammer Tool', image: '🔨' },
+            { id: 22, category: 'hardware', price: 80, unit: '1 Set', hi: 'स्क्रूड्राइवर सेट (पेचकस)', en: 'Screwdriver Set', image: '🪛' }
+        ];
+
+        // Global State
+        let currentLang = 'hi'; // 'hi' or 'en'
+        let currentCategory = 'all';
+        let searchQuery = '';
+        let currentSort = 'default';
+        let cart = []; // Array of { product, qty }
+        let userAddress = {
+            village: '',
+            landmark: '',
+            pincode: '',
+            phone: '',
+            lat: 25.5941,
+            lng: 85.1376
+        };
+        let leafletMap = null;
+        let leafletMarker = null;
+
+        // UI Translation Dictionary
+        const TRANSLATIONS = {
+            hi: {
+                subtitle: "गाँव-गाँव तक सीधी होम डिलीवरी",
+                searchPlaceholder: "सामान या कैटेगिरी खोजें...",
+                allCategoriesBtn: "सभी कैटेगिरी",
+                bannerTag: "सुरक्षित और तेज़ होम डिलीवरी",
+                bannerTitle: "आपके गाँव तक शुद्ध और ताज़ा सामान!",
+                bannerDesc: "ऑर्डर करें और सीधे व्हाट्सएप से अपने घर पर पाएँ। ₹499 से अधिक के ऑर्डर पर मुफ्त डिलीवरी।",
+                bannerHelp: "मदद चाहिए? संपर्क करें",
+                sortLabel: "क्रमबद्ध करें:",
+                sortDefault: "लोकप्रियता (Popular)",
+                sortLow: "कीमत: कम से ज़्यादा",
+                sortHigh: "कीमत: ज़्यादा से कम",
+                cartTitle: "आपकी टोकरी (Cart)",
+                cartSubtotal: "कुल सामान कीमत:",
+                cartDelivery: "डिलीवरी शुल्क:",
+                cartFree: "मुफ्त",
+                cartTotal: "कुल योग (Total):",
+                cartAddrBtn: "पता दर्ज करें",
+                whatsappBtn: "व्हाट्सएप पर आर्डर भेजें",
+                emptyTitle: "कोई सामान नहीं मिला",
+                emptyDesc: "कृपया दूसरा शब्द खोजें या कोई अन्य कैटेगिरी चुनें।",
+                emptyBtn: "सभी सामान देखें",
+                locTitle: "डिलीवरी का सटीक पता चुनें",
+                gpsBtn: "मेरा स्थान (GPS)",
+                lblVillage: "गाँव / टोला / क्षेत्र का नाम *",
+                lblLandmark: "आस-पास का लैंडमार्क (उदा: मंदिर/स्कूल) *",
+                lblPincode: "पिनकोड *",
+                lblPhone: "मोबाइल नंबर *",
+                saveAddrBtn: "पता सुरक्षित करें और जारी रखें",
+                modalCatTitle: "सभी कैटेगिरी चुनें (Select Category)",
+                addBtn: "जोड़ें +",
+                addedMsg: "टोकरी में जोड़ा गया!"
+            },
+            en: {
+                subtitle: "Direct Home Delivery to Every Village",
+                searchPlaceholder: "Search products or categories...",
+                allCategoriesBtn: "All Categories",
+                bannerTag: "Fast & Safe Village Delivery",
+                bannerTitle: "Fresh & Authentic Essentials Delivered!",
+                bannerDesc: "Order easily via WhatsApp straight to your doorstep. Free delivery above ₹499.",
+                bannerHelp: "Need Help? Contact",
+                sortLabel: "Sort By:",
+                sortDefault: "Popularity",
+                sortLow: "Price: Low to High",
+                sortHigh: "Price: High to Low",
+                cartTitle: "Your Shopping Cart",
+                cartSubtotal: "Subtotal:",
+                cartDelivery: "Delivery Fee:",
+                cartFree: "FREE",
+                cartTotal: "Total Amount:",
+                cartAddrBtn: "Set Address",
+                whatsappBtn: "Send Order on WhatsApp",
+                emptyTitle: "No products found",
+                emptyDesc: "Try searching for another keyword or pick a different category.",
+                emptyBtn: "View All Items",
+                locTitle: "Select Precise Delivery Location",
+                gpsBtn: "My Location (GPS)",
+                lblVillage: "Village / Area Name *",
+                lblLandmark: "Nearby Landmark *",
+                lblPincode: "Pincode *",
+                lblPhone: "Mobile Number *",
+                saveAddrBtn: "Save Address & Continue",
+                modalCatTitle: "Select Category Grid",
+                addBtn: "Add +",
+                addedMsg: "Added to Cart!"
+            }
+        };
+
+        // Initialize & Render Category Scroll Pills
+        function renderCategoryPills() {
+            const container = document.getElementById('category-scroll-container');
+            const gridContainer = document.getElementById('modal-categories-grid');
+            
+            if (!container || !gridContainer) return;
+
+            let scrollHTML = '';
+            let modalHTML = '';
+
+            CATEGORIES.forEach(cat => {
+                const isActive = (cat.id === currentCategory);
+                const title = (currentLang === 'hi') ? cat.hi : cat.en;
+                
+                // Count items per category
+                const count = (cat.id === 'all') 
+                    ? PRODUCTS.length 
+                    : PRODUCTS.filter(p => p.category === cat.id).length;
+
+                // Horizontal Scroll Pill Item
+                scrollHTML += `
+                    <button onclick="selectCategory('${cat.id}')" 
+                        id="cat-pill-${cat.id}"
+                        class="snap-start flex-shrink-0 flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all duration-200 border ${
+                            isActive 
+                                ? 'bg-brand-600 text-white border-brand-600 shadow-sm shadow-brand-500/30' 
+                                : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200/80 hover:border-slate-300'
+                        }">
+                        <span class="text-sm">${cat.emoji}</span>
+                        <span class="whitespace-nowrap">${title}</span>
+                        <span class="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] ${
+                            isActive ? 'bg-brand-700 text-white' : 'bg-slate-100 text-slate-500'
+                        }">${count}</span>
+                    </button>
+                `;
+
+                // Modal Grid Item
+                modalHTML += `
+                    <button onclick="selectCategory('${cat.id}'); toggleCategoryModal(false);" 
+                        class="p-3 rounded-xl border flex flex-col items-center text-center gap-1.5 transition ${
+                            isActive 
+                                ? 'bg-brand-50 border-brand-500 text-brand-800 font-bold ring-2 ring-brand-500/20' 
+                                : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-800'
+                        }">
+                        <span class="text-2xl">${cat.emoji}</span>
+                        <span class="text-xs font-semibold leading-tight">${title}</span>
+                        <span class="text-[10px] text-slate-400 font-normal">${count} items</span>
+                    </button>
+                `;
+            });
+
+            container.innerHTML = scrollHTML;
+            gridContainer.innerHTML = modalHTML;
+        }
+
+        // Category Switch Handler with auto-scroll centering
+        function selectCategory(catId) {
+            currentCategory = catId;
+            renderCategoryPills();
+            renderProducts();
+
+            // Auto Scroll Selected Pill into view smoothly
+            const selectedPill = document.getElementById(`cat-pill-${catId}`);
+            if (selectedPill) {
+                selectedPill.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+            }
+        }
+
+        // Toggle Category Grid Modal
+        function toggleCategoryModal(show) {
+            const modal = document.getElementById('category-modal');
+            if (!modal) return;
+            if (show) {
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        // Render Product Cards based on active Category, Search & Sort
+        function renderProducts() {
+            const grid = document.getElementById('products-grid');
+            const emptyState = document.getElementById('empty-state');
+            const titleEl = document.getElementById('active-category-title');
+            const countBadge = document.getElementById('product-count-badge');
+
+            if (!grid) return;
+
+            // Filter Products
+            let filtered = PRODUCTS.filter(product => {
+                const matchesCategory = (currentCategory === 'all') || (product.category === currentCategory);
+                
+                const query = searchQuery.toLowerCase().trim();
+                const matchesSearch = !query || 
+                    product.hi.toLowerCase().includes(query) || 
+                    product.en.toLowerCase().includes(query) ||
+                    product.category.toLowerCase().includes(query);
+
+                return matchesCategory && matchesSearch;
+            });
+
+            // Sort Products
+            if (currentSort === 'price-low') {
+                filtered.sort((a, b) => a.price - b.price);
+            } else if (currentSort === 'price-high') {
+                filtered.sort((a, b) => b.price - a.price);
+            }
+
+            // Update Section Header Title
+            const activeCatObj = CATEGORIES.find(c => c.id === currentCategory) || CATEGORIES[0];
+            const catTitle = (currentLang === 'hi') ? activeCatObj.hi : activeCatObj.en;
+            
+            titleEl.innerHTML = `<span>${activeCatObj.emoji}</span> <span>${catTitle}</span>`;
+            countBadge.innerText = `${filtered.length}`;
+
+            if (filtered.length === 0) {
+                grid.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+
+            // Render Product Cards
+            grid.innerHTML = filtered.map(p => {
+                const pTitle = (currentLang === 'hi') ? p.hi : p.en;
+                const cartItem = cart.find(item => item.product.id === p.id);
+                const qtyInCart = cartItem ? cartItem.qty : 0;
+
+                return `
+                    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition duration-200 flex flex-col justify-between overflow-hidden p-3 group">
+                        <div>
+                            <!-- Product Visual Placeholder -->
+                            <div class="h-28 sm:h-32 bg-slate-50 rounded-xl flex items-center justify-center text-4xl sm:text-5xl group-hover:scale-105 transition duration-200 relative">
+                                <span>${p.image}</span>
+                                ${qtyInCart > 0 ? `<span class="absolute top-2 right-2 bg-brand-600 text-white font-bold text-[10px] px-2 py-0.5 rounded-full shadow-sm">${qtyInCart} in cart</span>` : ''}
+                            </div>
+
+                            <!-- Product Info -->
+                            <div class="mt-2.5">
+                                <h3 class="font-bold text-xs sm:text-sm text-slate-800 line-clamp-2 leading-snug">${pTitle}</h3>
+                                <p class="text-[11px] text-slate-400 mt-0.5 font-medium">${p.unit}</p>
+                            </div>
+                        </div>
+
+                        <!-- Price & Action Button -->
+                        <div class="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between gap-1">
+                            <div>
+                                <span class="text-sm sm:text-base font-extrabold text-slate-900">₹${p.price}</span>
+                            </div>
+
+                            ${qtyInCart > 0 ? `
+                                <div class="flex items-center gap-1.5 bg-brand-50 border border-brand-200 rounded-lg p-0.5">
+                                    <button onclick="updateCartQuantity(${p.id}, -1)" class="w-6 h-6 rounded-md bg-white text-brand-700 shadow-xs font-bold text-xs flex items-center justify-center hover:bg-brand-100">-</button>
+                                    <span class="text-xs font-bold text-brand-900 w-4 text-center">${qtyInCart}</span>
+                                    <button onclick="updateCartQuantity(${p.id}, 1)" class="w-6 h-6 rounded-md bg-brand-600 text-white font-bold text-xs flex items-center justify-center hover:bg-brand-700">+</button>
+                                </div>
+                            ` : `
+                                <button onclick="addToCart(${p.id})" class="px-3 py-1.5 rounded-lg bg-brand-50 hover:bg-brand-600 text-brand-700 hover:text-white border border-brand-200 text-xs font-bold transition flex items-center gap-1 active:scale-95">
+                                    <i class="fa-solid fa-plus text-[10px]"></i>
+                                    <span>${TRANSLATIONS[currentLang].addBtn}</span>
+                                </button>
+                            `}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Cart Management
+        function addToCart(productId) {
+            const product = PRODUCTS.find(p => p.id === productId);
+            if (!product) return;
+
+            const existing = cart.find(item => item.product.id === productId);
+            if (existing) {
+                existing.qty += 1;
+            } else {
+                cart.push({ product, qty: 1 });
+            }
+
+            showToast(`${(currentLang === 'hi' ? product.hi : product.en)} - ${TRANSLATIONS[currentLang].addedMsg}`);
+            updateCartUI();
+            renderProducts();
+        }
+
+        function updateCartQuantity(productId, delta) {
+            const index = cart.findIndex(item => item.product.id === productId);
+            if (index > -1) {
+                cart[index].qty += delta;
+                if (cart[index].qty <= 0) {
+                    cart.splice(index, 1);
+                }
+            }
+            updateCartUI();
+            renderProducts();
+        }
+
+        function updateCartUI() {
+            const badge = document.getElementById('cart-badge-count');
+            const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
+            badge.innerText = totalItems;
+
+            const itemsContainer = document.getElementById('cart-items-container');
+            const subtotalEl = document.getElementById('cart-subtotal');
+            const totalEl = document.getElementById('cart-total');
+            const freeStatus = document.getElementById('free-shipping-status');
+            const freeBar = document.getElementById('free-shipping-bar');
+
+            const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.qty), 0);
+            const isFreeShipping = subtotal >= 499;
+
+            subtotalEl.innerText = `₹${subtotal}`;
+            totalEl.innerText = `₹${subtotal}`;
+
+            // Free Shipping Progress
+            const progress = Math.min(100, (subtotal / 499) * 100);
+            freeBar.style.width = `${progress}%`;
+            if (isFreeShipping) {
+                freeStatus.innerText = (currentLang === 'hi') ? "मुफ्त डिलीवरी अनलॉक!" : "Free Shipping Unlocked!";
+            } else {
+                freeStatus.innerText = `₹499 में से ₹${subtotal}`;
+            }
+
+            if (cart.length === 0) {
+                itemsContainer.innerHTML = `
+                    <div class="text-center py-12 text-slate-400">
+                        <i class="fa-solid fa-basket-shopping text-4xl mb-2"></i>
+                        <p class="text-xs font-semibold">${currentLang === 'hi' ? 'आपकी टोकरी खाली है' : 'Your cart is empty'}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            itemsContainer.innerHTML = cart.map(item => {
+                const title = currentLang === 'hi' ? item.product.hi : item.product.en;
+                return `
+                    <div class="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200/70">
+                        <div class="flex items-center gap-2.5">
+                            <span class="text-2xl">${item.product.image}</span>
+                            <div>
+                                <h4 class="text-xs font-bold text-slate-800">${title}</h4>
+                                <p class="text-[11px] text-slate-500">₹${item.product.price} × ${item.qty} = <span class="font-bold text-slate-900">₹${item.product.price * item.qty}</span></p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-0.5">
+                            <button onclick="updateCartQuantity(${item.product.id}, -1)" class="w-5 h-5 rounded bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center hover:bg-slate-200">-</button>
+                            <span class="text-xs font-bold text-slate-800 w-4 text-center">${item.qty}</span>
+                            <button onclick="updateCartQuantity(${item.product.id}, 1)" class="w-5 h-5 rounded bg-brand-600 text-white font-bold text-xs flex items-center justify-center hover:bg-brand-700">+</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // WhatsApp Checkout Formatting
+        function checkoutToWhatsApp() {
+            if (cart.length === 0) {
+                showToast(currentLang === 'hi' ? "कृपया पहले टोकरी में सामान जोड़ें!" : "Please add items to cart first!");
+                return;
+            }
+
+            if (!userAddress.village || !userAddress.phone) {
+                showToast(currentLang === 'hi' ? "कृपया अपना गाँव और फोन नंबर दर्ज करें!" : "Please enter your Village & Phone number!");
+                openLocationModal();
+                return;
+            }
+
+            let text = `🛒 *घर-तक (Ghar-Tak) नया ऑर्डर*\n`;
+            text += `-------------------------------\n`;
+            cart.forEach((item, index) => {
+                const name = currentLang === 'hi' ? item.product.hi : item.product.en;
+                text += `${index + 1}. *${name}* - ${item.qty} x ₹${item.product.price} = ₹${item.qty * item.product.price}\n`;
+            });
+
+            const subtotal = cart.reduce((sum, item) => sum + (item.product.price * item.qty), 0);
+            text += `-------------------------------\n`;
+            text += `💰 *कुल योग (Total): ₹${subtotal}*\n\n`;
+
+            text += `📍 *डिलीवरी का पता (Delivery Address):*\n`;
+            text += `• गाँव/टोला: ${userAddress.village}\n`;
+            text += `• लैंडमार्क: ${userAddress.landmark || 'N/A'}\n`;
+            text += `• पिनकोड: ${userAddress.pincode || 'N/A'}\n`;
+            text += `• मोबाइल: ${userAddress.phone}\n`;
+            text += `• मैप लोकेशन: https://www.google.com/maps?q=${userAddress.lat},${userAddress.lng}\n`;
+
+            const encoded = encodeURIComponent(text);
+            const whatsappURL = `https://wa.me/917903384714?text=${encoded}`;
+            window.open(whatsappURL, '_blank');
+        }
+
+        function toggleCartModal(show) {
+            const drawer = document.getElementById('cart-drawer');
+            if (!drawer) return;
+            if (show) drawer.classList.remove('hidden');
+            else drawer.classList.add('hidden');
+        }
+
+        // Initialize Map in Modal
+        function initLeafletMap() {
+            if (leafletMap) return; // already initialized
+
+            const patnaLat = 25.5941;
+            const patnaLng = 85.1376;
+
+            leafletMap = L.map('leaflet-map').setView([patnaLat, patnaLng], 13);
+
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap &copy; CARTO',
+                maxZoom: 19
+            }).addTo(leafletMap);
+
+            leafletMarker = L.marker([patnaLat, patnaLng], { draggable: true }).addTo(leafletMap);
+
+            leafletMarker.on('dragend', function (e) {
+                const position = leafletMarker.getLatLng();
+                userAddress.lat = position.lat;
+                userAddress.lng = position.lng;
+            });
+
+            leafletMap.on('click', function (e) {
+                leafletMarker.setLatLng(e.latlng);
+                userAddress.lat = e.latlng.lat;
+                userAddress.lng = e.latlng.lng;
+            });
+        }
+
+        function getUserGPSLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((pos) => {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    userAddress.lat = lat;
+                    userAddress.lng = lng;
+
+                    if (leafletMap && leafletMarker) {
+                        leafletMap.setView([lat, lng], 15);
+                        leafletMarker.setLatLng([lat, lng]);
+                    }
+                    showToast(currentLang === 'hi' ? "आपका स्थान मिल गया!" : "Location captured!");
+                }, () => {
+                    showToast(currentLang === 'hi' ? "GPS अनुमति नहीं मिली।" : "GPS permission denied.");
+                });
+            }
+        }
+
+        function openLocationModal() {
+            const modal = document.getElementById('location-modal');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                initLeafletMap();
+                if (leafletMap) leafletMap.invalidateSize();
+            }, 200);
+        }
+
+        function closeLocationModal() {
+            document.getElementById('location-modal').classList.add('hidden');
+        }
+
+        function saveLocationAddress() {
+            const village = document.getElementById('input-village').value.trim();
+            const landmark = document.getElementById('input-landmark').value.trim();
+            const pincode = document.getElementById('input-pincode').value.trim();
+            const phone = document.getElementById('input-phone').value.trim();
+
+            if (!village || !phone) {
+                showToast(currentLang === 'hi' ? "कृपया गाँव और फोन नंबर दर्ज करें" : "Please fill Village and Phone number");
+                return;
+            }
+
+            userAddress.village = village;
+            userAddress.landmark = landmark;
+            userAddress.pincode = pincode;
+            userAddress.phone = phone;
+
+            document.getElementById('header-location-text').innerText = village;
+            closeLocationModal();
+            showToast(currentLang === 'hi' ? "पता सुरक्षित हो गया!" : "Address saved successfully!");
+        }
+
+        // Search Handling
+        function handleSearch(val) {
+            searchQuery = val;
+            const desktopClear = document.getElementById('desktop-clear-search');
+            const mobileClear = document.getElementById('mobile-clear-search');
+
+            if (val.length > 0) {
+                if (desktopClear) desktopClear.classList.remove('hidden');
+                if (mobileClear) mobileClear.classList.remove('hidden');
+            } else {
+                if (desktopClear) desktopClear.classList.add('hidden');
+                if (mobileClear) mobileClear.classList.add('hidden');
+            }
+
+            renderProducts();
+        }
+
+        function clearSearch() {
+            searchQuery = '';
+            document.getElementById('desktop-search').value = '';
+            document.getElementById('mobile-search').value = '';
+            document.getElementById('desktop-clear-search').classList.add('hidden');
+            document.getElementById('mobile-clear-search').classList.add('hidden');
+            renderProducts();
+        }
+
+        function handleSortChange(val) {
+            currentSort = val;
+            renderProducts();
+        }
+
+        // Language Switcher
+        function toggleLanguage() {
+            currentLang = (currentLang === 'hi') ? 'en' : 'hi';
+            
+            document.getElementById('lang-btn-text').innerText = (currentLang === 'hi') ? 'English' : 'हिंदी';
+            
+            // Translate static elements
+            const t = TRANSLATIONS[currentLang];
+            document.getElementById('header-subtitle').innerText = t.subtitle;
+            document.getElementById('desktop-search').placeholder = t.searchPlaceholder;
+            document.getElementById('mobile-search').placeholder = t.searchPlaceholder;
+            document.getElementById('all-cat-btn-text').innerText = t.allCategoriesBtn;
+            document.getElementById('banner-tag').innerText = t.bannerTag;
+            document.getElementById('banner-title').innerText = t.bannerTitle;
+            document.getElementById('banner-desc').innerText = t.bannerDesc;
+            document.getElementById('banner-help-title').innerText = t.bannerHelp;
+            document.getElementById('sort-label').innerText = t.sortLabel;
+            document.getElementById('sort-opt-default').innerText = t.sortDefault;
+            document.getElementById('sort-opt-low').innerText = t.sortLow;
+            document.getElementById('sort-opt-high').innerText = t.sortHigh;
+            document.getElementById('cart-header-title').innerText = t.cartTitle;
+            document.getElementById('cart-subtotal-label').innerText = t.cartSubtotal;
+            document.getElementById('cart-delivery-label').innerText = t.cartDelivery;
+            document.getElementById('cart-delivery-fee').innerText = t.cartFree;
+            document.getElementById('cart-total-label').innerText = t.cartTotal;
+            document.getElementById('cart-addr-btn').innerText = t.cartAddrBtn;
+            document.getElementById('whatsapp-btn-text').innerText = t.whatsappBtn;
+            document.getElementById('empty-title').innerText = t.emptyTitle;
+            document.getElementById('empty-desc').innerText = t.emptyDesc;
+            document.getElementById('empty-btn-text').innerText = t.emptyBtn;
+            document.getElementById('loc-modal-title').innerText = t.locTitle;
+            document.getElementById('gps-btn-text').innerText = t.gpsBtn;
+            document.getElementById('lbl-village').innerText = t.lblVillage;
+            document.getElementById('lbl-landmark').innerText = t.lblLandmark;
+            document.getElementById('lbl-pincode').innerText = t.lblPincode;
+            document.getElementById('lbl-phone').innerText = t.lblPhone;
+            document.getElementById('save-addr-btn').innerText = t.saveAddrBtn;
+            document.getElementById('modal-cat-title').innerText = t.modalCatTitle;
+
+            renderCategoryPills();
+            renderProducts();
+            updateCartUI();
+        }
+
+        // Non-obstructive Toast Notifications
+        function showToast(msg) {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            toast.className = 'bg-slate-900/90 backdrop-blur-md text-white text-xs font-semibold px-4 py-3 rounded-xl shadow-xl flex items-center justify-between border border-slate-700/50 pointer-events-auto transform transition duration-300 translate-y-[-10px] opacity-0';
+            toast.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-circle-check text-brand-500 text-sm"></i>
+                    <span>${msg}</span>
+                </div>
+            `;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-[-10px]', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-[-10px]');
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+
+        window.onload = function () {
+            renderCategoryPills();
+            renderProducts();
+            updateCartUI();
+        };
+    </script>
+</body>
+</html>
